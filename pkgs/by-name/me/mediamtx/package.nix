@@ -1,10 +1,12 @@
 {
   lib,
   buildGoModule,
+  callPackage,
   fetchFromGitHub,
   fetchurl,
   nixosTests,
   runCommand,
+  libcamera,
 }:
 
 let
@@ -13,6 +15,7 @@ let
     url = "https://cdn.jsdelivr.net/npm/hls.js@v${hlsJsVersion}/dist/hls.min.js";
     hash = "sha256-oS5+4c1kpp3NsxQVfkXa/LpwW/sLFEC3k1yyZdN0Qj4=";
   };
+  rpicamera = callPackage ./rpicamera.nix {inherit libcamera;};
 in
 buildGoModule (finalAttrs: {
   pname = "mediamtx";
@@ -28,16 +31,13 @@ buildGoModule (finalAttrs: {
 
   vendorHash = "sha256-Y07FF3VLPTn1ORI/9XTsm5nVVzRea6L6gjaHUP6GvFI=";
 
+  patches = [./rpicamera-skip-ldconfig-arch-check.patch];
+
   postPatch = ''
     cp ${hlsJs} internal/servers/hls/hls.min.js
     echo "v${finalAttrs.version}" > internal/core/VERSION
-
-    # disable binary-only rpi camera support
-    substituteInPlace internal/staticsources/rpicamera/source_other.go \
-      --replace-fail '!linux || (!arm && !arm64)' 'linux || !linux'
-    substituteInPlace internal/staticsources/rpicamera/*_arm_.go \
-      --replace-fail '(linux && arm) || (linux && arm64)' 'linux && !linux'
-    rm internal/staticsources/rpicamera/camera_linux_arm*.go
+    mkdir internal/staticsources/rpicamera/mtxrpicam_64
+    cp ${rpicamera}/bin/mtxrpicam internal/staticsources/rpicamera/mtxrpicam_64/
   '';
 
   subPackages = [ "." ];
